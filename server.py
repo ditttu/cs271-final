@@ -6,21 +6,24 @@ import time
 import random
 import pickle
 
+# custom classes and constants
+import raft
 import constants
 
-#Global variables
+# Global variables
 self_id = int(sys.argv[1])
 port = constants.CLIENT_PORT_PREFIX + self_id
 peers = constants.CONNECTION_GRAPH[self_id]
-current_term = 0
-voted_for = None
-log = []
-commit_index = 0
-last_applied = 0
-state = 'follower'
-run = True
+raftServer = raft.RaftServer('follower')
+# current_term = 0
+# voted_for = None
+# log = []
+# commit_index = 0
+# last_applied = 0
+# state = 'follower'
+# run = True
 
-#Create and bind sockets
+# Create and bind sockets
 soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 soc.setblocking(False)
 soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -74,7 +77,7 @@ def send_padded_msg_encoded(sock, msg, msg_enc):
     padded_msg = b''.join([header, encoded_msg, header_enc, msg_enc, padding(padding_length)])
     sock.sendall(padded_msg)
 
-#connect to all clients
+# connect to all clients
 def initiate():
     for i in range(constants.NUM_CLIENT):
         if i != self_id:
@@ -153,7 +156,7 @@ def network_input(sock, msg):
     thread.start()
 
 inputSockets = [soc.fileno(), sys.stdin.fileno()]
-while run:
+while raftServer.run:
     inputready, outputready, exceptready = select.select(inputSockets, [], [])
 
     for x in inputready:
