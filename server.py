@@ -14,14 +14,7 @@ import constants
 self_id = int(sys.argv[1])
 port = constants.CLIENT_PORT_PREFIX + self_id
 peers = constants.CONNECTION_GRAPH[self_id]
-raftServer = raft.RaftServer('follower')
-# current_term = 0
-# voted_for = None
-# log = []
-# commit_index = 0
-# last_applied = 0
-# state = 'follower'
-# run = True
+raftServer = raft.RaftServer()
 
 # Create and bind sockets
 soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
