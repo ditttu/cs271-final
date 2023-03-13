@@ -44,7 +44,7 @@ def send_padded_msg_encoded(sock, msg, msg_enc):
     sock.sendall(padded_msg)
 
 # handle unencoded network inputs
-def unencoded_input(sock, msg):
+def unencoded_input(sock, msg, self_id):
     t = msg[constants.HEADER_SIZE-1]
     if t != 117:
         enter_error("wrong function called on: unencoded_input")
@@ -62,7 +62,7 @@ def unencoded_input(sock, msg):
 def to_string(obj):
     json_obj = pickle.dumps(obj)
     return json_obj
-def encoded_input(sock, msg):
+def encoded_input(sock, msg, self_id):
     t = msg[constants.HEADER_SIZE-1]
     if t != 65:
         enter_error("wrong function called on: encoded_input")

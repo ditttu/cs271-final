@@ -7,6 +7,7 @@ import time
 # custom classes and constants
 import raft
 import constants
+import helpers
 
 # Global variables
 self_id = int(sys.argv[1])
@@ -35,16 +36,20 @@ def keyboard_input(request):
     elif request[0] == "i":
         initiate()
     else:
-        enter_error("Invalid keyboard command") 
+        helpers.enter_error("Invalid keyboard command") 
+
+def initiate():
+    # implement
+    pass
 
 # handle network inputs
 def network_input(sock, msg):
     print(msg[constants.HEADER_SIZE-1])
     t = msg[constants.HEADER_SIZE-1]
     if t == 117:
-        thread = threading.Thread(target=unencoded_input, args=(sock,msg,))
+        thread = threading.Thread(target=helpers.unencoded_input, args=(sock,msg,self_id,))
     else:
-        thread = threading.Thread(target=encoded_input, args=(sock,msg,))
+        thread = threading.Thread(target=helpers.encoded_input, args=(sock,msg,self_id))
     thread.start()
 
 inputSockets = [soc.fileno(), sys.stdin.fileno()]
@@ -62,7 +67,7 @@ while raftServer.run:
         else:   # data received from socket
             msg_received = x.recv(constants.MESSAGE_SIZE)
             if len(msg_received) != constants.MESSAGE_SIZE:
-                enter_error('Incorrectly padded message received.')
+                helpers.enter_error('Incorrectly padded message received.')
                 inputSockets.remove(x)
             else:
                 thread = threading.Thread(target=network_input, args=(x, msg_received,), daemon=True)
