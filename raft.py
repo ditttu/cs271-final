@@ -39,6 +39,9 @@ class RaftNode:
         # sockets
         self.soc_send = soc_list.copy()
 
+        # initialize solid disc files
+        self.disc = helpers.DiscLog(self.node_id)
+
     def instantiate_sockets(self):
         for node_id in self.peers:
             if node_id != self.node_id:
@@ -175,10 +178,16 @@ class RaftNode:
 
     def apply_log_entry(self, command):
         print(f"Applying command: {command}")
+        #TODO: implement normal operations here
         
     def run(self):
         #TODO: implement
         return
+    
+    # commit log entry at current index
+    def commit(self):
+        self.disc.commit(self.log[self.commit_index])
+        self.commit_index += 1
         
     def check_timeout(self):
         now = time.time()

@@ -77,3 +77,25 @@ def encoded_input(sock, msg, self_id):
         sock.send("Successfully connected to {}".format(self_id).encode())
     else:
         enter_error('Received message that is incorrectly formatted.')
+
+# writing to / reading from disc
+class DiscLog:
+    def __init__(self, self_id):
+        self.file_name = 'log' + str(self_id) + '.pickle'
+        self.size = 0 # number of entries written to disc
+    
+    # commit a new log
+    def commit(self, new_log_entry):
+        file = open(self.file_name, 'ab')
+        pickle.dump(new_log_entry, file)
+        self.size += 1
+        file.close()
+    
+    # read from disc
+    def read(self):
+        file = open(self.file_name, 'rb')
+        disc_log = []
+        for _ in range(self.size):
+            disc_log.append(pickle.load(file))
+        file.close()
+        return disc_log

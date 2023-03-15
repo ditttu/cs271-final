@@ -13,7 +13,6 @@ import helpers
 self_id = int(sys.argv[1])
 port = constants.CLIENT_PORT_PREFIX + self_id
 peers = constants.CONNECTION_GRAPH[self_id]
-raftServer = raft.RaftServer()
 
 # Create and bind sockets
 soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,6 +24,9 @@ for i in range(constants.NUM_CLIENT):
     soc_send.append(temp_soc)
 soc.bind((constants.HOST,port))
 soc.listen(constants.NUM_CLIENT)
+
+# Create RaftNode
+raftServer = raft.RaftNode(self_id, peers, soc_send)
 
 # handle keyboard inputs
 def keyboard_input(request):
