@@ -171,7 +171,7 @@ class RaftNode:
         
         else:
             self.next_index[follower_id] -= 1
-            #TODO:retry?
+            self.append_response(self, follower_id, term, success, match_index)
         
     def apply_log_entries(self):
         for i in range(self.last_applied + 1, self.commit_index + 1):
@@ -201,10 +201,6 @@ class RaftNode:
             self.dicts.put(command.dict_id, command.key, command.value)
         elif command.type == helpers.CommandType.GET:
             self.dicts.get(command.dict_id, command.key)
-
-    def run(self):
-        #TODO: implement
-        return
     
     # commit log entry at current index
     def commit(self):
@@ -213,8 +209,6 @@ class RaftNode:
         
     def check_timeout(self):
         now = time.time()
-        # print(now, self.last_heartbeat_timestamp, constants.HEARTBEAT)
-        # print("Checking timeout")
         if (self.state == RaftState.FOLLOWER or self.state == RaftState.CANDIDATE) and (self.election_timer is None):
             self.run_election_timer()
         
