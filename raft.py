@@ -240,6 +240,23 @@ class RaftNode:
         
         self.send_rpc(destination, message)
 
+    def forward_to_leader(self, log_entry):
+        destination = self.leader_id
+        prev_log_index = self.next_index[destination] - 1
+        prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
+
+        message = {
+            "type": "append_entries",
+            "term": self.current_term,
+            "leader_id": self.node_id,
+            "prev_log_index": prev_log_index,
+            "prev_log_term": prev_log_term,
+            "entries": [log_entry],
+            "leader_commit": self.commit_index
+        }
+        self.send_rpc(destination, message)
+
+
     def send_request_vote(self, destination):
         prev_log_index = self.next_index[destination] - 1
         prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
@@ -320,3 +337,11 @@ class RaftNode:
     def handle_ack(self, obj):
         #TODO:write
         return
+
+    def handle_command(self, command):
+        if self.state == RaftState.LEADER or self.state == RaftState.CANDIDATE:
+            index = len(self.log)
+            log_entry = {'command': command, 'index' : index, 'term' : self.current_term}
+            self.log.append(log_entry)
+        elif self.state == RaftState.FOLLOWER:
+            self.forward_to_leader(log_entry)

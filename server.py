@@ -90,9 +90,7 @@ def keyboard_input(request):
         if type in ['create', 'put', 'get']:
             command_type = helpers.get_command_type(type)
             command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
-            #:TODO
-            pass
-
+            raftServer.handle_command(command)
         elif type == 'printDict':
             raftServer.dicts.priintDict(dict_id)
         elif type == 'printAll':
