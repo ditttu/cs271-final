@@ -1,8 +1,9 @@
 import time
 import threading
 import constants
+import dictionary
 import helpers
-import socket
+# import socket
 from enum import Enum
 
 class RaftState(Enum):
@@ -22,7 +23,8 @@ class RaftNode:
         self.current_term = 0
         self.voted_for = None
         self.log = []
-        
+        self.dicts = dictionary.Dictionaries(self.node_id)
+
         # initialize volatile state
         self.commit_index = 0
         self.last_applied = 0
@@ -67,6 +69,7 @@ class RaftNode:
         self.state = RaftState.FOLLOWER
         self.votes_received = set()
         
+    # receive rpc
     def request_vote(self, candidate_id, candidate_term, last_log_index, last_log_term):
         if candidate_term > self.current_term:
             self.current_term = candidate_term
@@ -176,10 +179,15 @@ class RaftNode:
                         continue
                     self.send_ack(node_id)
 
-    def apply_log_entry(self, command):
+    def apply_log_entry(self, command : helpers.Command):
         print(f"Applying command: {command}")
-        #TODO: implement normal operations here
-        
+        if command.type == helpers.CommandType.CREATE:
+            self.dicts.create(command.client_ids)
+        elif command.type == helpers.CommandType.PUT:
+            self.dicts.put(command.dict_id, command.key, command.value)
+        elif command.type == helpers.CommandType.GET:
+            self.dicts.get(command.dict_id, command.key)
+
     def run(self):
         #TODO: implement
         return

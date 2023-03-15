@@ -1,5 +1,6 @@
 import constants
 import pickle
+from enum import Enum
 
 # print errors
 def enter_error(string):
@@ -99,3 +100,18 @@ class DiscLog:
             disc_log.append(pickle.load(file))
         file.close()
         return disc_log
+    
+
+# commands
+class Command:
+    def __init__(self, type, client_ids=None, dict_id=None, key=None, value=None):
+        self.type = type
+        self.client_ids = client_ids
+        self.dict_id = dict_id
+        self.key = key
+        self.value = value
+
+class CommandType(Enum):
+    CREATE = 0
+    PUT = 1
+    GET = 2
