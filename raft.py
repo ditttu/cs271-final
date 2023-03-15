@@ -141,9 +141,11 @@ class RaftNode:
                 self.log.append(entry)
             index += 1
         
+        # commit entries to solid disc
         if leader_commit > self.commit_index:
-            #TODO:Commit entries
-            self.commit_index = min(leader_commit, len(self.log) - 1)
+            while self.commit_index < min(leader_commit, len(self.log) - 1):
+                self.commit_next_entry()
+            # self.commit_index = min(leader_commit, len(self.log) - 1)
         
         return True, leader_term, index
         
@@ -203,7 +205,7 @@ class RaftNode:
             self.dicts.get(command.dict_id, command.key)
     
     # commit log entry at current index
-    def commit(self):
+    def commit_next_entry(self):
         self.disc.commit(self.log[self.commit_index])
         self.commit_index += 1
         
