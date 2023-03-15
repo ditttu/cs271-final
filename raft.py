@@ -3,7 +3,8 @@ import threading
 import constants
 import dictionary
 import helpers
-# import socket
+import random
+import socket
 from enum import Enum
 
 class RaftState(Enum):
@@ -18,6 +19,7 @@ class RaftNode:
         self.node_id = node_id
         self.peers = peers
         self.state = RaftState.FOLLOWER
+        self.election_timer = None
         
         # initialize persistent state
         self.current_term = 0
@@ -35,8 +37,8 @@ class RaftNode:
         self.leader_id = None
         
         # start election timer
-        self.run_election_timer()
         self.votes_received = set()
+        self.last_heartbeat_timestamp = time.time()
 
         # sockets
         self.soc_send = soc_list.copy()
@@ -55,10 +57,12 @@ class RaftNode:
     def become_leader(self):
         if self.state != RaftState.CANDIDATE:
             return
-        
+        print("Became Leader")
+        print("Term = {}".format(self.current_term))
         self.state = RaftState.LEADER
         self.leader_id = self.node_id
         self.votes_received = set()
+        self.stop_election_timer()
         
         self.next_index = {peer: len(self.log) for peer in self.peers}
         self.match_index = {peer: 0 for peer in self.peers}
@@ -66,10 +70,31 @@ class RaftNode:
         self.send_heartbeat()
 
     def become_follower(self):
+        print("Became follower")
         self.state = RaftState.FOLLOWER
         self.votes_received = set()
         
-    # receive rpc
+    def send_heartbeat(self):
+        self.last_heartbeat_timestamp = time.time()
+        for node_id in self.peers:
+            if node_id == self.node_id:
+                continue
+            self.send_append_entries(node_id)
+        
+    def start_leader_election(self):
+        self.current_term += 1
+        self.voted_for = self.node_id
+        self.state = RaftState.CANDIDATE
+        print("Started new election. Term = {}".format(self.current_term))
+        self.reset_election_timer()
+        
+        self.votes_received = set()
+        self.votes_received.add(self.node_id)
+        for node_id in self.peers:
+            if node_id == self.node_id:
+                continue
+            self.send_request_vote(node_id)
+        
     def request_vote(self, candidate_id, candidate_term, last_log_index, last_log_term):
         if candidate_term > self.current_term:
             self.current_term = candidate_term
@@ -94,7 +119,7 @@ class RaftNode:
         
     def append_entries(self, leader_term, leader_id, prev_log_index, prev_log_term, entries, leader_commit):
         if leader_term < self.current_term:
-            return False, self.current_term
+            return False, self.current_term, prev_log_index
         
         if leader_term > self.current_term:
             self.current_term = leader_term
@@ -104,10 +129,11 @@ class RaftNode:
 
         self.reset_election_timer()
         
-        if prev_log_index >= len(self.log) or self.log[prev_log_index]['term'] != prev_log_term:
+        print(prev_log_index, self.log)
+        if len(self.log) != 0 and (prev_log_index >= len(self.log) or self.log[prev_log_index]['term'] != prev_log_term):
             return False, self.current_term, prev_log_index
 
-        index = prev_log_index + 1
+        index = prev_log_index
         for entry in entries:
             if index < len(self.log) and self.log[index]['term'] != entry['term']:
                 del self.log[index:]
@@ -120,26 +146,6 @@ class RaftNode:
             self.commit_index = min(leader_commit, len(self.log) - 1)
         
         return True, leader_term, index
-        
-    def send_heartbeat(self):
-        for node_id in self.peers:
-            if node_id == self.node_id:
-                continue
-            self.send_append_entries(node_id)
-        
-    def start_leader_election(self):
-        self.current_term += 1
-        self.voted_for = self.node_id
-        self.state = RaftState.CANDIDATE
-        
-        self.reset_election_timer()
-        
-        self.votes_received = set()
-        self.votes_received.add(self.node_id)
-        for node_id in self.peers:
-            if node_id == self.node_id:
-                continue
-            self.send_request_vote(node_id)
         
     def vote_response(self, voter_id, term, vote_granted):
         if self.state != RaftState.CANDIDATE or term != self.current_term:
@@ -207,11 +213,13 @@ class RaftNode:
         
     def check_timeout(self):
         now = time.time()
+        # print(now, self.last_heartbeat_timestamp, constants.HEARTBEAT)
+        # print("Checking timeout")
+        if (self.state == RaftState.FOLLOWER or self.state == RaftState.CANDIDATE) and (self.election_timer is None):
+            self.run_election_timer()
         
-        if self.state == RaftState.CANDIDATE and now - self.last_election_timestamp > self.election_timeout:
-            self.start_leader_election()
-        
-        elif (self.state == RaftState.FOLLOWER or self.state == RaftState.LEADER) and now - self.last_heartbeat_timestamp > self.heartbeat_timeout:
+        elif self.state == RaftState.LEADER and now - self.last_heartbeat_timestamp > constants.HEARTBEAT:
+            print("sending heartbeat")
             self.send_heartbeat()
         
     def send_append_entries(self, destination):
@@ -280,11 +288,13 @@ class RaftNode:
         
     def run_election_timer(self):
         self.stop_election_timer()
-        self.election_timer = threading.Timer(constants.TIMEOUT, self.start_leader_election)
+        timeout = random.uniform(constants.TIMEOUT, 2*constants.TIMEOUT)
+        self.election_timer = threading.Timer(timeout, self.start_leader_election)
         self.election_timer.start()
         
     def reset_election_timer(self):
         self.stop_election_timer()
+        print("reset election timer")
         
         self.run_election_timer()
         
@@ -293,3 +303,20 @@ class RaftNode:
             self.election_timer.cancel()
             self.election_timer = None
 
+    def handle_vote_request(self, obj):
+        canditate_id, successs, term = self.request_vote(candidate_id=obj['candidateId'], candidate_term=obj['term'], last_log_index=obj['lastLogIndex'], last_log_term=obj['lastLogTerm'])
+        self.send_vote_response(canditate_id,term, successs)
+
+    def handle_append_entries(self, sender, obj):
+        success, term, index = self.append_entries(obj['term'], obj['leader_id'], obj['prev_log_index'], obj['prev_log_term'], obj['entries'], obj['leader_commit'])
+        self.send_append_response(sender, success, term, index)
+
+    def handle_vote_response(self, obj):
+        self.vote_response(obj['sender_id'], obj['term'], obj['vote_granted'])
+
+    def handle_append_response(self, obj):
+        self.append_response(obj['sender_id'], obj['term'], obj['success'], obj['match_index'])
+
+    def handle_ack(self, obj):
+        #TODO:write
+        return

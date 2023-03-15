@@ -3,6 +3,7 @@ import select
 import sys
 import threading
 import time
+import pickle
 
 # custom classes and constants
 import raft
@@ -13,6 +14,7 @@ import helpers
 self_id = int(sys.argv[1])
 port = constants.CLIENT_PORT_PREFIX + self_id
 peers = constants.CONNECTION_GRAPH[self_id]
+initiated = False
 
 # Create and bind sockets
 soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -28,34 +30,78 @@ soc.listen(constants.NUM_CLIENT)
 # Create RaftNode
 raftServer = raft.RaftNode(self_id, peers, soc_send)
 
+# handle unencoded network inputs
+def unencoded_input(sock, msg, self_id):
+    t = msg[constants.HEADER_SIZE-1]
+    if t != 117:
+        helpers.enter_error("wrong function called on: unencoded_input")
+    num_bytes = int(msg[:constants.HEADER_SIZE-1].decode())
+    msg_string = msg[constants.HEADER_SIZE:constants.HEADER_SIZE + num_bytes].decode()
+    data = msg_string.split()
+    if data[0] == "Connection": # socket connection
+        print(' '.join(data))
+        sock.send("Successfully connected to {}".format(self_id).encode())
+    else:
+        helpers.enter_error('Received message that is incorrectly formatted.')
+
+# handle encoded network inputs
+
+def encoded_input(sock, msg, self_id):
+    t = msg[constants.HEADER_SIZE-1]
+    if t != 101:
+        helpers.enter_error("wrong function called on: encoded_input")
+    num_bytes = int(msg[:constants.HEADER_SIZE-1].decode())
+    msg_string = msg[constants.HEADER_SIZE:constants.HEADER_SIZE + num_bytes].decode()
+    num_bytes_enc = int(msg[constants.HEADER_SIZE + num_bytes:2*constants.HEADER_SIZE + num_bytes].decode())
+    enc_obj = msg[2*constants.HEADER_SIZE + num_bytes:2*constants.HEADER_SIZE + num_bytes + num_bytes_enc]
+    data = msg_string.split()
+    data.append(enc_obj)
+    if data[0] == "Connection": # socket connection
+        print(' '.join(data))
+        sock.send("Successfully connected to {}".format(self_id).encode())
+    else:
+        obj = pickle.loads(enc_obj)
+        if obj['type'] == 'request_vote':
+            raftServer.handle_vote_request(obj)
+        elif obj['type'] == 'append_entries':
+            sender = int(msg_string)
+            raftServer.handle_append_entries(sender, obj)
+        elif obj['type'] == 'vote_response':
+            raftServer.handle_vote_response(obj)
+        elif obj['type'] == 'append_response':
+            raftServer.handle_append_response(obj)
+        elif obj['type'] == 'ack':
+            raftServer.handle_ack(obj)
+        else:
+            helpers.enter_error('Received message that is incorrectly formatted.')
+
 # handle keyboard inputs
 def keyboard_input(request):
-    global run
+    global run, initiated
     if len(request) == 0:
         pass
     elif request[0] == "exit":
         run = 0
     elif request[0] == "i":
-        initiate()
+        initiated = True
+        raftServer.instantiate_sockets()
     else:
         helpers.enter_error("Invalid keyboard command") 
 
-def initiate():
-    # implement
-    pass
-
 # handle network inputs
 def network_input(sock, msg):
-    print(msg[constants.HEADER_SIZE-1])
     t = msg[constants.HEADER_SIZE-1]
     if t == 117:
-        thread = threading.Thread(target=helpers.unencoded_input, args=(sock,msg,self_id,))
+        thread = threading.Thread(target=unencoded_input, args=(sock,msg,self_id,))
     else:
-        thread = threading.Thread(target=helpers.encoded_input, args=(sock,msg,self_id))
+        thread = threading.Thread(target=encoded_input, args=(sock,msg,self_id))
     thread.start()
 
 inputSockets = [soc.fileno(), sys.stdin.fileno()]
-while raftServer.run:
+while True:
+    if initiated:
+        thread = threading.Thread(raftServer.check_timeout(), daemon=True)
+        thread.start()
     inputready, outputready, exceptready = select.select(inputSockets, [], [])
 
     for x in inputready:
