@@ -104,7 +104,7 @@ class DiscLog:
 
 # commands
 class Command:
-    def __init__(self, type, client_ids=None, dict_id=None, key=None, value=None):
+    def __init__(self, type, client_ids=[], dict_id=None, key=None, value=None):
         self.type = type
         self.client_ids = client_ids
         self.dict_id = dict_id

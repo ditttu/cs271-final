@@ -169,9 +169,14 @@ class RaftNode:
         
     def apply_log_entries(self):
         for i in range(self.last_applied + 1, self.commit_index + 1):
-            self.apply_log_entry(self.log[i]['command'])
-            
+            cmd = self.log[i]['command']
             self.last_applied = i
+            
+            if self.node_id not in cmd:
+                continue
+
+            self.apply_log_entry(cmd)
+            
             
             if self.leader_id == self.node_id:
                 for node_id in self.peers:
@@ -180,6 +185,9 @@ class RaftNode:
                     self.send_ack(node_id)
 
     def apply_log_entry(self, command : helpers.Command):
+        if self.node_id not in command.client_ids:
+            helpers.enter_error('Cannot apply entry for dictionary the client is not a part of.')
+            return
         print(f"Applying command: {command}")
         if command.type == helpers.CommandType.CREATE:
             self.dicts.create(command.client_ids)
