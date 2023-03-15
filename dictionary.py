@@ -47,7 +47,8 @@ class Dictionaries:
     def printAll(self):
         print('---\nPrinting all dictionaries:\n---')
         for dict_id in self.dicts:
-            self.printDict(dict_id)
+            if self.client_id in self.dicts[dict_id]:
+                self.printDict(dict_id)
 
     # helper functions
     def generate_dict_id(self):
