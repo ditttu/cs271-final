@@ -2,6 +2,7 @@ import constants
 import pickle
 from enum import Enum
 
+
 # print errors
 def enter_error(string):
     print(f'Warning: {string}')
@@ -48,6 +49,23 @@ def to_string(obj):
     json_obj = pickle.dumps(obj)
     return json_obj
 
+# format keyboard input
+def process_input(request):
+    type, client_ids, dict_id, key, value = None, [], -1, None, None
+    type = request[0]
+    if type in constants.valid_commands:
+        if type == 'create':
+            client_ids=get_client_ids(request)
+        elif type in ['get', 'put']:
+            dict_id = request[1]
+            key  = request[2]
+            if type == 'put':
+                value = request[3]
+    return type, client_ids, dict_id, key, value
+
+def get_client_ids(request):
+    return request[1:]
+
 # writing to / reading from disc
 class DiscLog:
     def __init__(self, self_id):
@@ -84,3 +102,14 @@ class CommandType(Enum):
     CREATE = 0
     PUT = 1
     GET = 2
+
+def get_command_type(type):
+    if type == 'create':
+        return CommandType.CREATE
+    elif type == 'put':
+        return CommandType.CREATE
+    elif type == 'get':
+        return CommandType.CREATE
+    else:
+        enter_error('invalid command type in get_command_type()')
+        raise Exception()

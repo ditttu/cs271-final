@@ -86,7 +86,28 @@ def keyboard_input(request):
         initiated = True
         raftServer.instantiate_sockets()
     else:
-        helpers.enter_error("Invalid keyboard command") 
+        type, client_ids, dict_id, key, value = helpers.process_input(request)
+        if type in ['create', 'put', 'get']:
+            command_type = helpers.get_command_type(type)
+            command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
+            #:TODO
+            pass
+
+        elif type == 'printDict':
+            raftServer.dicts.priintDict(dict_id)
+        elif type == 'printAll':
+            raftServer.dicts.printAll()
+        elif type == 'failLink':
+            #:TODO
+            pass
+        elif type == 'fixLink':
+            #:TODO
+            pass
+        elif type == 'failProcess':
+            #:TODO
+            pass
+        else:
+            helpers.enter_error("Invalid keyboard command") 
 
 # handle network inputs
 def network_input(sock, msg):

@@ -15,6 +15,7 @@ class Dictionary:
     
     def print_dict(self):
         print(self.dict)
+        print('---')
 
 class Dictionaries:
     dict_id = 0
@@ -25,7 +26,8 @@ class Dictionaries:
     def create(self, client_ids):
         dict_id = self.generate_dict_id()
         self.dicts[dict_id] = Dictionary(client_ids)
-        print(f"Dictionary Created. ID : {dict_id}. Clients : {client_ids}")
+        print(f"Dictionary Created. ID : {dict_id}. Clients : {client_ids}\n---")
+        return dict_id
     
     def put(self, dict_id, key, value):
         if self.check_dict_id(dict_id):
@@ -43,10 +45,10 @@ class Dictionaries:
             self.dicts[dict_id].print_dict()
 
     def printAll(self):
-        print('Printing all dictionaries:')
+        print('---\nPrinting all dictionaries:\n---')
         for dict_id in self.dicts:
             self.printDict(dict_id)
-            
+
     # helper functions
     def generate_dict_id(self):
         self.dict_id += 1
