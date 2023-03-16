@@ -4,7 +4,7 @@ import constants
 import dictionary
 import helpers
 import random
-import socket
+import rsa
 from enum import Enum
 
 class RaftState(Enum):
@@ -20,6 +20,10 @@ class RaftNode:
         self.peers = peers
         self.state = RaftState.FOLLOWER
         self.election_timer = None
+
+        # initialize rsa keys
+        self.pk = {x : None for x in range(constants.NUM_CLIENT)}
+        (self.pk[self.node_id], self.sk) = rsa.newkeys(constants.KEY_LENGTH)
         
         # initialize persistent state
         self.current_term = 0
@@ -50,9 +54,10 @@ class RaftNode:
         for node_id in self.peers:
             if node_id != self.node_id:
                 self.soc_send[node_id].connect((constants.HOST, constants.CLIENT_PORT_PREFIX+node_id))
-                helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}".format(self.node_id))
+                helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}\nPublic Key = {}".format(self.node_id, self.pk[self.node_id]))
                 received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
                 print(received)
+                self.pk[node_id] = received.split()[-1] # read pk
 
     def become_leader(self):
         if self.state != RaftState.CANDIDATE:
@@ -144,9 +149,7 @@ class RaftNode:
         # commit entries to solid disc
         if leader_commit > self.commit_index:
             while self.commit_index < min(leader_commit, len(self.log) - 1):
-                self.commit_next_entry()
-            # self.commit_index = min(leader_commit, len(self.log) - 1)
-        
+                self.commit_next_entry()      
         return True, leader_term, index
         
     def vote_response(self, voter_id, term, vote_granted):
@@ -297,7 +300,7 @@ class RaftNode:
     def send_rpc(self, node_id, data):
         sender = str(self.node_id)
         obj = helpers.to_string(data)
-        helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj)
+        helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj, self.pk[node_id])
         
     def run_election_timer(self):
         self.stop_election_timer()
@@ -341,3 +344,7 @@ class RaftNode:
             self.log.append(log_entry)
         elif self.state == RaftState.FOLLOWER:
             self.forward_to_leader(log_entry)
+
+    # write keys on disc
+    def save_keys(self):
+        self.disc.save_keys(self.keys)

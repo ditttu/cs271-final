@@ -1,7 +1,7 @@
 import constants
 import pickle
 from enum import Enum
-
+import rsa
 
 # print errors
 def enter_error(string):
@@ -32,8 +32,8 @@ def send_padded_msg(sock, msg):
     padded_msg = b''.join([header, encoded_msg, padding(padding_length)])
     sock.sendall(padded_msg)
 
-# send a string and a byte object over socket via padding
-def send_padded_msg_encoded(sock, msg, msg_enc):
+# send a string and a byte object over socket via padding and encryption
+def send_padded_msg_encoded(sock, msg, msg_enc, pk):
     encoded_msg = msg.encode()
     num_bytes = len(encoded_msg)
     num_bytes_enc = len(msg_enc)
@@ -43,7 +43,8 @@ def send_padded_msg_encoded(sock, msg, msg_enc):
         enter_error('Message too big!')
     padding_length = constants.MESSAGE_SIZE - num_bytes - num_bytes_enc - len(header) - len(header_enc)
     padded_msg = b''.join([header, encoded_msg, header_enc, msg_enc, padding(padding_length)])
-    sock.sendall(padded_msg)
+    encrypted_msg = rsa.encrypt(padded_msg, pk)
+    sock.sendall(encrypted_msg)
 
 def to_string(obj):
     json_obj = pickle.dumps(obj)
@@ -89,7 +90,7 @@ class DiscLog:
         return disc_log
     
 
-# commands
+# dictionary commands
 class Command:
     def __init__(self, type, client_ids=[], dict_id=None, key=None, value=None):
         self.type = type

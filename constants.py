@@ -7,3 +7,4 @@ MESSAGE_SIZE = 2048 # message size in bytes
 HEADER_SIZE = 5
 TIMEOUT = 7 # election timeout period in seconds
 valid_commands = [ 'create', 'put', 'get', 'printDict', 'printAll', 'failLink', 'fixLink', 'failProcess' ]
+KEY_LENGTH = 512 # security parameter
