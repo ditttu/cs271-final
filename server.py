@@ -50,11 +50,15 @@ def unencoded_input(sock, msg, self_id):
     data = msg_string.split()
     if data[0] == "Connection": # socket connection
         print(' '.join(data))
-        node_id = int(data[3])
-        sock.send("Successfully connected to {}".format(self_id).encode())
-        raftServer.fix_link(node_id)
         if data[1] == '(First)':
-            raftServer.pk[node_id] = rsa.PublicKey(data[-2], data[-1]) # read pk
+            node_id = int(data[4])
+            sock.send("Successfully connected to {}".format(self_id).encode())
+            raftServer.fix_link(node_id, True)
+            raftServer.pk[node_id] = rsa.PublicKey(int(data[-2]), int(data[-1])) # read pk
+        else:
+            node_id = int(data[3])
+            sock.send("Successfully connected to {}".format(self_id).encode())
+            raftServer.fix_link(node_id)
     else:
         helpers.enter_error('Received message that is incorrectly formatted.')
 
@@ -75,8 +79,8 @@ def encoded_input(sock, msg, self_id):
         print(' '.join(data))
         sock.send("Successfully connected to {}".format(self_id).encode())
     else:
-        obj = pickle.loads(enc_obj)
-        obj = rsa.decrypt(obj, raftServer.sk) # decryption
+        obj = helpers.decrypt(enc_obj, raftServer.sk) # decryption
+        obj = pickle.loads(obj)
         if obj['type'] == 'request_vote':
             raftServer.handle_vote_request(obj)
         elif obj['type'] == 'append_entries':

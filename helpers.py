@@ -1,7 +1,10 @@
 import constants
 import pickle
+import random
 import rsa
 from enum import Enum
+import aes as AES
+import os
 
 
 # print errors
@@ -37,7 +40,7 @@ def send_padded_msg(sock, msg):
 def send_padded_msg_encoded(sock, msg, msg_enc, pk):
     encoded_msg = msg.encode()
     num_bytes = len(encoded_msg)
-    msg_enc = rsa.decrypt(msg_enc, pk) # encryption
+    msg_enc = encrypt(msg_enc, pk) # encryption
     num_bytes_enc = len(msg_enc)
     header = header_s(num_bytes, "e")
     header_enc = header_s(num_bytes_enc, "")
@@ -104,12 +107,12 @@ class Command:
             log_entry['client_ids'] = self.client_ids
             log_entry['dict_pk'] = dict_pk
             for client_id in self.client_ids:
-                log_entry[('encrypted_key', client_id)] = rsa.encrypt(pickle.dumps(dict_sk), pk[client_id])
+                log_entry[('encrypted_key', client_id)] = encrypt(pickle.dumps(dict_sk), pk[client_id])
         elif self.type in [CommandType.PUT, CommandType.GET]:
             log_entry['issuer_id'] = self.issuer_id
-            log_entry['encrypted_key'] = rsa.encrypt(self.key.encode(), dict_pk)
+            log_entry['encrypted_key'] = encrypt(self.key.encode(), dict_pk)
             if self.type == CommandType.PUT:
-                log_entry['encrypted_value'] = rsa.encrypt(self.value.encode(), dict_pk)
+                log_entry['encrypted_value'] = encrypt(self.value.encode(), dict_pk)
         return log_entry
 
 class CommandType(Enum):
@@ -138,3 +141,21 @@ def get_command_name(type):
     else:
         enter_error('invalid command type in get_command_name()')
         raise Exception()
+    
+def encrypt(msg, pk):
+    aes_key = os.urandom(16)
+    nonce = os.urandom(16)
+    ciphertext = AES.AES(aes_key).encrypt_ctr(msg, nonce)
+    enc_aes_key = rsa.encrypt(aes_key, pk)
+    enc_obj = {"nonce":nonce, "ciphertext":ciphertext, "enc_key":enc_aes_key}
+    enc = pickle.dumps(enc_obj)
+    return enc
+
+def decrypt(ct, sk):
+    enc_obj = pickle.loads(ct)
+    aes_nonce = enc_obj["nonce"]
+    ciphertext = enc_obj["ciphertext"]
+    enc_aes_key = enc_obj["enc_key"]
+    aes_key = rsa.decrypt(enc_aes_key, sk)
+    msg = AES.AES(aes_key).decrypt_ctr(ciphertext, aes_nonce)
+    return msg
