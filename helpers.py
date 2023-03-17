@@ -69,26 +69,17 @@ def get_client_ids(request):
     return request[1:]
 
 # writing to / reading from disc
-class DiscLog:
-    def __init__(self, self_id):
-        self.file_name = 'log' + str(self_id) + '.pickle'
-        self.size = 0 # number of entries written to disc
+def commit(obj, file_name):
+    obj.soc_send = []
+    obj.election_timer = None
+    with open(file_name, "wb") as point:
+        pickle.dump(obj,point)
     
-    # commit a new log
-    def commit(self, new_log_entry):
-        file = open(self.file_name, 'ab')
-        pickle.dump(new_log_entry, file)
-        self.size += 1
-        file.close()
-    
-    # read from disc
-    def read(self):
-        file = open(self.file_name, 'rb')
-        disc_log = []
-        for _ in range(self.size):
-            disc_log.append(pickle.load(file))
-        file.close()
-        return disc_log
+# read from disc
+def read(filename):
+    with open(filename, "rb") as point:
+        disk_log = pickle.load(point)
+    return disk_log
     
 
 # commands

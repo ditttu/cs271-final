@@ -4,6 +4,9 @@ import sys
 import threading
 import time
 import pickle
+import os.path
+import os
+import signal
 
 # custom classes and constants
 import raft
@@ -28,7 +31,13 @@ soc.bind((constants.HOST,port))
 soc.listen(constants.NUM_CLIENT)
 
 # Create RaftNode
-raftServer = raft.RaftNode(self_id, peers, soc_send)
+if os.path.isfile("./log_{}.pickle".format(self_id)):
+    raftServer = helpers.read("log_{}.pickle".format(self_id))
+    raftServer.soc_send = soc_send
+    initiated = True
+    raftServer.instantiate_sockets()
+else:
+    raftServer = raft.RaftNode(self_id, peers, soc_send)
 
 # handle unencoded network inputs
 def unencoded_input(sock, msg, self_id):
@@ -41,6 +50,7 @@ def unencoded_input(sock, msg, self_id):
     if data[0] == "Connection": # socket connection
         print(' '.join(data))
         sock.send("Successfully connected to {}".format(self_id).encode())
+        raftServer.instantiate_sockets()
     else:
         helpers.enter_error('Received message that is incorrectly formatted.')
 
@@ -105,8 +115,9 @@ def keyboard_input(request):
             #TODO
             pass
         elif type == 'failProcess':
-            #TODO
-            pass
+            initiated = False
+            raftServer.save_state()
+            os.kill(os.getpid(),signal.SIGKILL)
         else:
             helpers.enter_error("Invalid keyboard command") 
 

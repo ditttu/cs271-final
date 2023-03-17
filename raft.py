@@ -44,9 +44,6 @@ class RaftNode:
         # sockets
         self.soc_send = soc_list.copy()
 
-        # initialize solid disc files
-        self.disc = helpers.DiscLog(self.node_id)
-
     def instantiate_sockets(self):
         for node_id in self.peers:
             if node_id != self.node_id:
@@ -218,11 +215,6 @@ class RaftNode:
         elif command.type == helpers.CommandType.GET:
             if self.dicts.check_dict_id(command.dict_id):
                 self.dicts.get(command.dict_id, command.key)
-    
-    # commit log entry at current index
-    def commit(self):
-        self.disc.commit(self.log[self.commit_index])
-        self.commit_index += 1
         
     def check_timeout(self):
         now = time.time()
@@ -354,3 +346,7 @@ class RaftNode:
             self.log.append(log_entry)
         elif self.state == RaftState.FOLLOWER:
             self.forward_to_leader(log_entry)
+
+    def save_state(self):
+        filename = "log_" + str(self.node_id) + ".pickle"
+        helpers.commit(self,filename)
