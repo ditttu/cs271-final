@@ -58,6 +58,8 @@ class RaftNode:
                 received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
                 print(received)
                 self.pk[node_id] = received.split()[-1] # read pk
+        self.dicts.pk = self.pk
+        self.save_keys()
 
     def become_leader(self):
         if self.state != RaftState.CANDIDATE:
@@ -182,10 +184,6 @@ class RaftNode:
         for i in range(self.last_applied + 1, self.commit_index + 1):
             cmd = self.log[i]['command']
             self.last_applied = i
-            
-            if self.node_id not in cmd:
-                continue
-
             self.apply_log_entry(cmd)
             
             
@@ -195,18 +193,37 @@ class RaftNode:
                         continue
                     self.send_ack(node_id)
 
-    def apply_log_entry(self, command : helpers.Command):
+    def apply_log_entry(self, command):
         if self.node_id not in command.client_ids:
             helpers.enter_error('Cannot apply entry for dictionary the client is not a part of.')
             return
-        print(f"Applying command: {command}")
+        print(f"Applying command: {command['type']}")
+        if self.node_id not in command.client_ids or command.issuer_id not in command.client_ids:
+            print('Not applying command: Access denied or invalid issuer.\n---')
+            return # check access for self and issuer
+        dict_id = command['dict_id']
         if command.type == helpers.CommandType.CREATE:
-            self.dicts.create(command.client_ids)
+            dict_key = ('encrypted key', self.node_id)
+            if dict_key not in command:
+                raise Exception('incorrectly formatted log entry')
+            dict_pk = command['dict_pk']
+            dict_sk = rsa.decrypt(command[dict_key], self.sk)
+            self.dicts.create(dict_id, command['client_ids'], dict_pk, dict_sk)
         elif command.type == helpers.CommandType.PUT:
-            self.dicts.put(command.dict_id, command.key, command.value)
+            self.check_dict_sk(dict_id)
+            dict_sk = self.dicts.dict_sk[dict_id]
+            key = rsa.decrypt(command['encrypted_key'], dict_sk)
+            value = rsa.decrypt(command['encrypted_value'], dict_sk)
+            self.dicts.put(dict_id, key, value)
         elif command.type == helpers.CommandType.GET:
-            self.dicts.get(command.dict_id, command.key)
-    
+            self.check_dict_sk(dict_id)
+            dict_sk = self.dicts.dict_sk[dict_id]
+            key = rsa.decrypt(command['encrypted_key'], dict_sk)
+            self.dicts.get(dict_id, key)
+    def check_dict_sk(self, dict_id):
+        if dict_id not in self.dicts.dict_sk:
+            raise Exception(f'Dict sk unknown for Dictionary {dict_id}.')
+
     # commit log entry at current index
     def commit_next_entry(self):
         self.disc.commit(self.log[self.commit_index])
@@ -337,10 +354,30 @@ class RaftNode:
         #TODO:write
         return
 
-    def handle_command(self, command):
+    def handle_command(self, command : helpers.Command):
+        index = len(self.log)
+        dict_pk, dict_sk, dict_id = None, None, (-1,-1)
+        if command.type == helpers.CommandType.CREATE:
+            dict_id = self.dicts.generate_dict_id()
+            (dict_pk, dict_sk) = rsa.newkeys(constants.KEY_LENGTH) # create dictionary keys and store them
+            self.dicts.dict_pk[dict_id] = dict_pk
+            self.dicts.dict_sk[dict_id] = dict_sk
+        else:
+            dict_id = command.dict_id
+            dict_pk = self.dicts.dict_pk[dict_id]
+            dict_sk = self.dicts.dict_sk[dict_id]
+
+        # create log entry
+        log_entry = {}
+        if command.type in [helpers.CommandType.CREATE, helpers.CommandType.GET, helpers.CommandType.PUT]:
+            log_entry = {'command': command.get_log_entry(self.pk, dict_pk, dict_sk), 'index' : index, 'term' : self.current_term}                
+        else:
+            helpers.enter_error("handle_command() called with incorrect command type.")
+            raise Exception()
+
+        
+
         if self.state == RaftState.LEADER or self.state == RaftState.CANDIDATE:
-            index = len(self.log)
-            log_entry = {'command': command, 'index' : index, 'term' : self.current_term}
             self.log.append(log_entry)
         elif self.state == RaftState.FOLLOWER:
             self.forward_to_leader(log_entry)

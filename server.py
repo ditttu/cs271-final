@@ -2,8 +2,8 @@ import socket
 import select
 import sys
 import threading
-import time
 import pickle
+import rsa
 
 # custom classes and constants
 import raft
@@ -61,6 +61,7 @@ def encoded_input(sock, msg, self_id):
         sock.send("Successfully connected to {}".format(self_id).encode())
     else:
         obj = pickle.loads(enc_obj)
+        obj = rsa.decrypt(obj, raftServer.sk) # decryption
         if obj['type'] == 'request_vote':
             raftServer.handle_vote_request(obj)
         elif obj['type'] == 'append_entries':
@@ -89,7 +90,7 @@ def keyboard_input(request):
         type, client_ids, dict_id, key, value = helpers.process_input(request)
         if type in ['create', 'put', 'get']:
             command_type = helpers.get_command_type(type)
-            command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
+            command = helpers.Command(command_type, issuer_id=self_id, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
             raftServer.handle_command(command)
         elif type == 'printDict':
             raftServer.dicts.priintDict(dict_id)
@@ -113,7 +114,8 @@ def network_input(sock, msg):
     if t == 117:
         thread = threading.Thread(target=unencoded_input, args=(sock,msg,self_id,))
     else:
-        thread = threading.Thread(target=encoded_input, args=(sock,msg,self_id))
+        dec_msg = rsa.decrypt(msg, raftServer.sk) # decrypt the message
+        thread = threading.Thread(target=encoded_input, args=(sock,dec_msg,self_id))
     thread.start()
 
 inputSockets = [soc.fileno(), sys.stdin.fileno()]

@@ -1,4 +1,6 @@
 import helpers
+import constants
+import rsa
 
 class Dictionary:
     def __init__(self, client_ids):
@@ -22,11 +24,16 @@ class Dictionaries:
     def __init__(self, client_id):
         self.dicts = {}
         self.client_id = client_id
+        self.dict_pk = {}
+        self.dict_sk = {}
+        self.pk = {} # client public keys
 
     def create(self, client_ids):
         dict_id = self.generate_dict_id()
         self.dicts[dict_id] = Dictionary(client_ids)
-        print(f"Dictionary Created. ID : {dict_id}. Clients : {client_ids}\n---")
+        print(f"Dictionary Created. ID : {dict_id}. Public Key: {self.dict_pk[dict_id]}. Clients : {client_ids}\n---")
+
+
         return dict_id
     
     def put(self, dict_id, key, value):
