@@ -116,11 +116,17 @@ def network_input(sock, msg):
         thread = threading.Thread(target=encoded_input, args=(sock,msg,self_id))
     thread.start()
 
+def timer_check():
+    global initiated
+    while True:
+        if initiated:
+            thread = threading.Thread(target = raftServer.check_timeout, daemon=True)
+            thread.start()
+
 inputSockets = [soc.fileno(), sys.stdin.fileno()]
+thread = threading.Thread(target = timer_check, daemon=True)
+thread.start()
 while True:
-    if initiated:
-        thread = threading.Thread(raftServer.check_timeout(), daemon=True)
-        thread.start()
     inputready, outputready, exceptready = select.select(inputSockets, [], [])
 
     for x in inputready:

@@ -70,8 +70,9 @@ class RaftNode:
         self.send_heartbeat()
 
     def become_follower(self):
-        print("Became follower")
-        self.state = RaftState.FOLLOWER
+        if self.state != RaftState.FOLLOWER:
+            print("Became follower")
+            self.state = RaftState.FOLLOWER
         self.votes_received = set()
         
     def send_heartbeat(self):
@@ -120,26 +121,27 @@ class RaftNode:
     def append_entries(self, leader_term, leader_id, prev_log_index, prev_log_term, entries, leader_commit):
         if leader_term < self.current_term:
             return False, self.current_term, prev_log_index
-        
-        if leader_term > self.current_term:
+        if leader_term > self.current_term or (leader_term == self.current_term and (prev_log_index+1) >= len(self.log)):
             self.current_term = leader_term
-            self.leader_id = leader_id
+            if self.leader_id != leader_id:
+                print("Updated leader to {}".format(leader_id))
+                self.leader_id = leader_id
             self.voted_for = None
             self.become_follower()
 
         self.reset_election_timer()
-        
-        print(prev_log_index, self.log)
+        if len(entries) != 0:
+            print(self.log, entries)
         if len(self.log) != 0 and (prev_log_index >= len(self.log) or self.log[prev_log_index]['term'] != prev_log_term):
             return False, self.current_term, prev_log_index
 
         index = prev_log_index
         for entry in entries:
+            index += 1
             if index < len(self.log) and self.log[index]['term'] != entry['term']:
                 del self.log[index:]
             if index >= len(self.log):
                 self.log.append(entry)
-            index += 1
         
         if leader_commit > self.commit_index:
             #TODO:Commit entries
@@ -160,7 +162,7 @@ class RaftNode:
     def append_response(self, follower_id, term, success, match_index):
         if self.state != RaftState.LEADER or term != self.current_term:
             return
-        
+        print("{} {} {}".format(follower_id,success,match_index))
         if success:
             self.next_index[follower_id] = match_index + 1
             self.match_index[follower_id] = match_index
@@ -171,7 +173,8 @@ class RaftNode:
         
         else:
             self.next_index[follower_id] -= 1
-            self.append_response(self, follower_id, term, success, match_index)
+            if self.next_index[follower_id] > self.match_index[follower_id]:
+                self.send_append_entries(self, follower_id)
         
     def apply_log_entries(self):
         for i in range(self.last_applied + 1, self.commit_index + 1):
@@ -213,14 +216,15 @@ class RaftNode:
             self.run_election_timer()
         
         elif self.state == RaftState.LEADER and now - self.last_heartbeat_timestamp > constants.HEARTBEAT:
-            print("sending heartbeat")
             self.send_heartbeat()
         
     def send_append_entries(self, destination):
         prev_log_index = self.next_index[destination] - 1
         prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
-        
-        entries = self.log[self.match_index[destination]:self.next_index[destination]]
+        if len(self.log) > prev_log_index:
+            entries = self.log[prev_log_index+1:]
+        else:
+            entries = []
         
         message = {
             "type": "append_entries",
@@ -231,7 +235,8 @@ class RaftNode:
             "entries": entries,
             "leader_commit": self.commit_index
         }
-        
+        if len(entries)!=0:
+            print(message)
         self.send_rpc(destination, message)
 
     def forward_to_leader(self, log_entry):
@@ -305,7 +310,6 @@ class RaftNode:
         
     def reset_election_timer(self):
         self.stop_election_timer()
-        print("reset election timer")
         
         self.run_election_timer()
         
@@ -333,9 +337,9 @@ class RaftNode:
         return
 
     def handle_command(self, command):
+        index = len(self.log)
+        log_entry = {'command': command, 'index' : index, 'term' : self.current_term}
         if self.state == RaftState.LEADER or self.state == RaftState.CANDIDATE:
-            index = len(self.log)
-            log_entry = {'command': command, 'index' : index, 'term' : self.current_term}
             self.log.append(log_entry)
         elif self.state == RaftState.FOLLOWER:
             self.forward_to_leader(log_entry)
