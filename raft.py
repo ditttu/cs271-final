@@ -28,12 +28,13 @@ class RaftNode:
         self.dicts = dictionary.Dictionaries(self.node_id)
 
         # initialize volatile state
-        self.commit_index = 0
-        self.last_applied = 0
+        self.commit_index = -1
+        self.last_applied = -1
         
         # initialize leader state
         self.next_index = {peer: 0 for peer in self.peers}
         self.match_index = {peer: 0 for peer in self.peers}
+        self.commit_maj = []
         self.leader_id = None
         
         # start election timer
@@ -62,6 +63,7 @@ class RaftNode:
         self.state = RaftState.LEADER
         self.leader_id = self.node_id
         self.votes_received = set()
+        self.commit_maj = [set() for log in self.log]
         self.stop_election_timer()
         
         self.next_index = {peer: len(self.log) for peer in self.peers}
@@ -144,7 +146,6 @@ class RaftNode:
                 self.log.append(entry)
         
         if leader_commit > self.commit_index:
-            #TODO:Commit entries
             self.commit_index = min(leader_commit, len(self.log) - 1)
         
         return True, leader_term, index
@@ -162,27 +163,39 @@ class RaftNode:
     def append_response(self, follower_id, term, success, match_index):
         if self.state != RaftState.LEADER or term != self.current_term:
             return
-        print("{} {} {}".format(follower_id,success,match_index))
         if success:
             self.next_index[follower_id] = match_index + 1
             self.match_index[follower_id] = match_index
             
             if match_index > self.commit_index and self.log[match_index]['term'] == self.current_term:
-                #TODO: check majority
-                self.commit_index = match_index
-        
+                for i in range(self.commit_index,match_index+1):
+                    self.commit_maj[i].add(follower_id)
+                    if len(self.commit_maj[i]) > len(self.peers) // 2:
+                        self.commit_index = i
+                self.apply_log_entries()
         else:
             self.next_index[follower_id] -= 1
             if self.next_index[follower_id] > self.match_index[follower_id]:
                 self.send_append_entries(self, follower_id)
-        
+
+    def ack(self, leader_id, term, apply_index):
+        if leader_id == self.leader_id and term == self.current_term:
+            if apply_index <= len(self.log):
+                self.commit_index = apply_index
+                self.apply_log_entries()
+
+    def leader_add(self, log_entry):
+        if self.state != RaftState.LEADER:
+            return False
+        else:
+            self.commit_maj.append(set())
+            self.log.append(log_entry)
+            return True
+
     def apply_log_entries(self):
         for i in range(self.last_applied + 1, self.commit_index + 1):
             cmd = self.log[i]['command']
             self.last_applied = i
-            
-            if self.node_id not in cmd:
-                continue
 
             self.apply_log_entry(cmd)
             
@@ -194,16 +207,17 @@ class RaftNode:
                     self.send_ack(node_id)
 
     def apply_log_entry(self, command : helpers.Command):
-        if self.node_id not in command.client_ids:
-            helpers.enter_error('Cannot apply entry for dictionary the client is not a part of.')
-            return
-        print(f"Applying command: {command}")
+        print(f"Applying command: {command.type}")
         if command.type == helpers.CommandType.CREATE:
-            self.dicts.create(command.client_ids)
+            if str(self.node_id) in command.client_ids:
+                self.dicts.create(command.client_ids, command.dict_id)
         elif command.type == helpers.CommandType.PUT:
-            self.dicts.put(command.dict_id, command.key, command.value)
+            print(command.dict_id, self.dicts)
+            if self.dicts.check_dict_id(command.dict_id):
+                self.dicts.put(command.dict_id, command.key, command.value)
         elif command.type == helpers.CommandType.GET:
-            self.dicts.get(command.dict_id, command.key)
+            if self.dicts.check_dict_id(command.dict_id):
+                self.dicts.get(command.dict_id, command.key)
     
     # commit log entry at current index
     def commit(self):
@@ -241,17 +255,11 @@ class RaftNode:
 
     def forward_to_leader(self, log_entry):
         destination = self.leader_id
-        prev_log_index = self.next_index[destination] - 1
-        prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
 
         message = {
-            "type": "append_entries",
-            "term": self.current_term,
-            "leader_id": self.node_id,
-            "prev_log_index": prev_log_index,
-            "prev_log_term": prev_log_term,
-            "entries": [log_entry],
-            "leader_commit": self.commit_index
+            "type": "leader_add",
+            "sender_id": self.node_id,
+            "entry": log_entry
         }
         self.send_rpc(destination, message)
 
@@ -333,13 +341,16 @@ class RaftNode:
         self.append_response(obj['sender_id'], obj['term'], obj['success'], obj['match_index'])
 
     def handle_ack(self, obj):
-        #TODO:write
-        return
+        self.ack(obj['candidate_id'],obj['term'], obj['last_log_index'])
+
+    def handle_leader_add(self, obj):
+        self.leader_add(obj['entry'])
 
     def handle_command(self, command):
         index = len(self.log)
         log_entry = {'command': command, 'index' : index, 'term' : self.current_term}
         if self.state == RaftState.LEADER or self.state == RaftState.CANDIDATE:
+            self.commit_maj.append(set())
             self.log.append(log_entry)
         elif self.state == RaftState.FOLLOWER:
             self.forward_to_leader(log_entry)

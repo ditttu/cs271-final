@@ -1,5 +1,6 @@
 import constants
 import pickle
+import random
 from enum import Enum
 
 
@@ -55,6 +56,7 @@ def process_input(request):
     type = request[0]
     if type in constants.valid_commands:
         if type == 'create':
+            dict_id = str(random.randint(0, 100))
             client_ids=get_client_ids(request)
         elif type in ['get', 'put']:
             dict_id = request[1]
@@ -107,9 +109,9 @@ def get_command_type(type):
     if type == 'create':
         return CommandType.CREATE
     elif type == 'put':
-        return CommandType.CREATE
+        return CommandType.PUT
     elif type == 'get':
-        return CommandType.CREATE
+        return CommandType.GET
     else:
         enter_error('invalid command type in get_command_type()')
         raise Exception()

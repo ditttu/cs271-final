@@ -72,6 +72,8 @@ def encoded_input(sock, msg, self_id):
             raftServer.handle_append_response(obj)
         elif obj['type'] == 'ack':
             raftServer.handle_ack(obj)
+        elif obj['type'] == 'leader_add':
+            raftServer.handle_leader_add(obj)
         else:
             helpers.enter_error('Received message that is incorrectly formatted.')
 
@@ -92,17 +94,17 @@ def keyboard_input(request):
             command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
             raftServer.handle_command(command)
         elif type == 'printDict':
-            raftServer.dicts.priintDict(dict_id)
+            raftServer.dicts.printDict(dict_id)
         elif type == 'printAll':
             raftServer.dicts.printAll()
         elif type == 'failLink':
-            #:TODO
+            #TODO
             pass
         elif type == 'fixLink':
-            #:TODO
+            #TODO
             pass
         elif type == 'failProcess':
-            #:TODO
+            #TODO
             pass
         else:
             helpers.enter_error("Invalid keyboard command") 

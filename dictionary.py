@@ -18,13 +18,11 @@ class Dictionary:
         print('---')
 
 class Dictionaries:
-    dict_id = 0
     def __init__(self, client_id):
         self.dicts = {}
         self.client_id = client_id
 
-    def create(self, client_ids):
-        dict_id = self.generate_dict_id()
+    def create(self, client_ids, dict_id):
         self.dicts[dict_id] = Dictionary(client_ids)
         print(f"Dictionary Created. ID : {dict_id}. Clients : {client_ids}\n---")
         return dict_id
@@ -49,12 +47,9 @@ class Dictionaries:
         for dict_id in self.dicts:
             self.printDict(dict_id)
 
-    # helper functions
-    def generate_dict_id(self):
-        self.dict_id += 1
-        return (self.client_id, self.dict_id)
-    
+    # helper functions    
     def check_dict_id(self, dict_id):
+        print(self.dicts)
         if dict_id not in self.dicts:
             helpers.enter_error(f"Dictionary {dict_id} is not recognized by this server")
             return False
