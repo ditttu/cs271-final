@@ -72,6 +72,7 @@ def get_client_ids(request):
 def commit(obj, file_name):
     obj.soc_send = []
     obj.election_timer = None
+    obj.connected = [False]*constants.NUM_CLIENT
     with open(file_name, "wb") as point:
         pickle.dump(obj,point)
     

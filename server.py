@@ -85,6 +85,8 @@ def encoded_input(sock, msg, self_id):
             raftServer.handle_ack(obj)
         elif obj['type'] == 'leader_add':
             raftServer.handle_leader_add(obj)
+        elif obj['type'] == 'fail':
+            raftServer.handle_send_fail(obj)
         else:
             helpers.enter_error('Received message that is incorrectly formatted.')
 
@@ -109,14 +111,14 @@ def keyboard_input(request):
         elif type == 'printAll':
             raftServer.dicts.printAll()
         elif type == 'failLink':
-            #TODO
-            pass
+            node_id = int(request[1])
+            raftServer.fail_link(node_id)
         elif type == 'fixLink':
             #TODO
             pass
         elif type == 'failProcess':
             initiated = False
-            raftServer.save_state()
+            raftServer.fail()
             os.kill(os.getpid(),signal.SIGKILL)
         else:
             helpers.enter_error("Invalid keyboard command") 
@@ -133,6 +135,7 @@ def network_input(sock, msg):
 def timer_check():
     global initiated
     while True:
+        time.sleep(1)
         if initiated:
             thread = threading.Thread(target = raftServer.check_timeout, daemon=True)
             thread.start()

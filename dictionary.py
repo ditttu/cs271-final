@@ -49,7 +49,6 @@ class Dictionaries:
 
     # helper functions    
     def check_dict_id(self, dict_id):
-        print(self.dicts)
         if dict_id not in self.dicts:
             helpers.enter_error(f"Dictionary {dict_id} is not recognized by this server")
             return False

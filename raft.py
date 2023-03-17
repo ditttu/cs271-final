@@ -43,10 +43,12 @@ class RaftNode:
 
         # sockets
         self.soc_send = soc_list.copy()
+        self.connected = [False]*len(soc_list)
 
     def instantiate_sockets(self):
         for node_id in self.peers:
-            if node_id != self.node_id:
+            if node_id != self.node_id and self.connected[node_id] == False:
+                self.connected[node_id] = True
                 self.soc_send[node_id].connect((constants.HOST, constants.CLIENT_PORT_PREFIX+node_id))
                 helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}".format(self.node_id))
                 received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
@@ -129,8 +131,6 @@ class RaftNode:
             self.become_follower()
 
         self.reset_election_timer()
-        if len(entries) != 0:
-            print(self.log, entries)
         if len(self.log) != 0 and prev_log_index >=0 and (prev_log_index > len(self.log) or self.log[prev_log_index]['term'] != prev_log_term):
             return False, self.current_term, prev_log_index
 
@@ -209,7 +209,6 @@ class RaftNode:
             if str(self.node_id) in command.client_ids:
                 self.dicts.create(command.client_ids, command.dict_id)
         elif command.type == helpers.CommandType.PUT:
-            print(command.dict_id, self.dicts)
             if self.dicts.check_dict_id(command.dict_id):
                 self.dicts.put(command.dict_id, command.key, command.value)
         elif command.type == helpers.CommandType.GET:
@@ -241,8 +240,6 @@ class RaftNode:
             "entries": entries,
             "leader_commit": self.commit_index
         }
-        if len(entries)!=0:
-            print(message)
         self.send_rpc(destination, message)
 
     def forward_to_leader(self, log_entry):
@@ -297,13 +294,25 @@ class RaftNode:
         }
         self.send_rpc(destination, message)
 
+    def send_fail(self, destination):
+        message = {
+            'type': 'fail',
+            'node_id': self.node_id
+        }
+        self.send_rpc(destination, message)
+
     def send_rpc(self, node_id, data):
         sender = str(self.node_id)
         obj = helpers.to_string(data)
-        helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj)
+        if self.connected[node_id]:
+            try:
+                helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj)
+            except:
+                helpers.enter_error("Couldn't send message to {}".format(node_id))
         
     def run_election_timer(self):
         self.stop_election_timer()
+        random.seed(self.node_id)
         timeout = random.uniform(constants.TIMEOUT, 2*constants.TIMEOUT)
         self.election_timer = threading.Timer(timeout, self.start_leader_election)
         self.election_timer.start()
@@ -347,6 +356,22 @@ class RaftNode:
         elif self.state == RaftState.FOLLOWER:
             self.forward_to_leader(log_entry)
 
+    def handle_send_fail(self,obj):
+        node_id = obj['node_id']
+        self.soc_send[node_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connected[node_id] = False
+
     def save_state(self):
         filename = "log_" + str(self.node_id) + ".pickle"
         helpers.commit(self,filename)
+
+    def fail_link(self, node_id):
+        self.send_fail(node_id)
+        self.soc_send[node_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connected[node_id] = False
+
+    def fail(self):
+        for peer in self.peers:
+            if peer != self.node_id:
+                self.fail_link(peer)
+        self.save_state()
