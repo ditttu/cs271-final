@@ -47,12 +47,7 @@ class RaftNode:
 
     def instantiate_sockets(self):
         for node_id in self.peers:
-            if node_id != self.node_id and self.connected[node_id] == False:
-                self.connected[node_id] = True
-                self.soc_send[node_id].connect((constants.HOST, constants.CLIENT_PORT_PREFIX+node_id))
-                helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}".format(self.node_id))
-                received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
-                print(received)
+            self.fix_link(node_id)
 
     def become_leader(self):
         if self.state != RaftState.CANDIDATE:
@@ -364,6 +359,14 @@ class RaftNode:
     def save_state(self):
         filename = "log_" + str(self.node_id) + ".pickle"
         helpers.commit(self,filename)
+
+    def fix_link(self, node_id):
+        if node_id != self.node_id and self.connected[node_id] == False:
+            self.connected[node_id] = True
+            self.soc_send[node_id].connect((constants.HOST, constants.CLIENT_PORT_PREFIX+node_id))
+            helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}".format(self.node_id))
+            received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
+            print(received)
 
     def fail_link(self, node_id):
         self.send_fail(node_id)

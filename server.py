@@ -49,8 +49,9 @@ def unencoded_input(sock, msg, self_id):
     data = msg_string.split()
     if data[0] == "Connection": # socket connection
         print(' '.join(data))
+        node_id = int(data[3])
         sock.send("Successfully connected to {}".format(self_id).encode())
-        raftServer.instantiate_sockets()
+        raftServer.fix_link(node_id)
     else:
         helpers.enter_error('Received message that is incorrectly formatted.')
 
