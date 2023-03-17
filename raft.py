@@ -47,7 +47,10 @@ class RaftNode:
 
     def instantiate_sockets(self):
         for node_id in self.peers:
-            self.fix_link(node_id)
+            try:
+                self.fix_link(node_id)
+            except:
+                helpers.enter_error("Couldn't connect to {}".format(node_id))
 
     def become_leader(self):
         if self.state != RaftState.CANDIDATE:
@@ -112,6 +115,7 @@ class RaftNode:
         
         self.voted_for = candidate_id
         self.reset_election_timer()
+        print("Returned Vote To {}".format(candidate_id))
         return candidate_id, True, candidate_term
         
     def append_entries(self, leader_term, leader_id, prev_log_index, prev_log_term, entries, leader_commit):
@@ -307,7 +311,7 @@ class RaftNode:
         
     def run_election_timer(self):
         self.stop_election_timer()
-        random.seed(self.node_id)
+        random.seed(time.time())
         timeout = random.uniform(constants.TIMEOUT, 2*constants.TIMEOUT)
         self.election_timer = threading.Timer(timeout, self.start_leader_election)
         self.election_timer.start()
@@ -372,6 +376,7 @@ class RaftNode:
         self.send_fail(node_id)
         self.soc_send[node_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connected[node_id] = False
+        print("Deleted link between self and {}".format(node_id))
 
     def fail(self):
         for peer in self.peers:

@@ -115,8 +115,8 @@ def keyboard_input(request):
             node_id = int(request[1])
             raftServer.fail_link(node_id)
         elif type == 'fixLink':
-            #TODO
-            pass
+            node_id = int(request[1])
+            raftServer.fix_link(node_id)
         elif type == 'failProcess':
             initiated = False
             raftServer.fail()
