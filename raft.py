@@ -363,6 +363,8 @@ class RaftNode:
                 helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj, self.pk[node_id])
             except:
                 helpers.enter_error("Couldn't send message to {}".format(node_id))
+                self.connected[node_id] = False
+                self.soc_send[node_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
     def run_election_timer(self):
         self.stop_election_timer()
