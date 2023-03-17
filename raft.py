@@ -134,7 +134,7 @@ class RaftNode:
         self.reset_election_timer()
         if len(entries) != 0:
             print(self.log, entries)
-        if len(self.log) != 0 and (prev_log_index >= len(self.log) or self.log[prev_log_index]['term'] != prev_log_term):
+        if len(self.log) != 0 and prev_log_index >=0 and (prev_log_index > len(self.log) or self.log[prev_log_index]['term'] != prev_log_term):
             return False, self.current_term, prev_log_index
 
         index = prev_log_index
@@ -174,7 +174,7 @@ class RaftNode:
                         self.commit_index = i
                 self.apply_log_entries()
         else:
-            self.next_index[follower_id] -= 1
+            self.next_index[follower_id] = (self.next_index[follower_id] - 1) if (self.next_index[follower_id] > 0) else 0
             if self.next_index[follower_id] > self.match_index[follower_id]:
                 self.send_append_entries(self, follower_id)
 

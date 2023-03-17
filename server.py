@@ -47,6 +47,7 @@ def unencoded_input(sock, msg, self_id):
 # handle encoded network inputs
 
 def encoded_input(sock, msg, self_id):
+    time.sleep(constants.MESSAGE_DELAY)
     t = msg[constants.HEADER_SIZE-1]
     if t != 101:
         helpers.enter_error("wrong function called on: encoded_input")
