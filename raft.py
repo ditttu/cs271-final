@@ -5,6 +5,7 @@ import dictionary
 import helpers
 import random
 import socket
+import rsa
 from enum import Enum
 
 class RaftState(Enum):
@@ -27,6 +28,10 @@ class RaftNode:
         self.log = []
         self.dicts = dictionary.Dictionaries(self.node_id)
 
+        # initialize rsa keys
+        self.pk = {x : None for x in range(constants.NUM_CLIENT)}
+        (self.pk[self.node_id], self.sk) = rsa.newkeys(constants.KEY_LENGTH)
+
         # initialize volatile state
         self.commit_index = -1
         self.last_applied = -1
@@ -45,12 +50,13 @@ class RaftNode:
         self.soc_send = soc_list.copy()
         self.connected = [False]*len(soc_list)
 
-    def instantiate_sockets(self):
+    def instantiate_sockets(self, firstConnection=True):
         for node_id in self.peers:
             try:
-                self.fix_link(node_id)
+                self.fix_link(node_id, firstConnection=firstConnection)
             except:
                 helpers.enter_error("Couldn't connect to {}".format(node_id))
+        self.dicts.pk = self.pk
 
     def become_leader(self):
         if self.state != RaftState.CANDIDATE:
@@ -305,7 +311,7 @@ class RaftNode:
         obj = helpers.to_string(data)
         if self.connected[node_id]:
             try:
-                helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj)
+                helpers.send_padded_msg_encoded(self.soc_send[node_id], sender, obj, self.pk[node_id])
             except:
                 helpers.enter_error("Couldn't send message to {}".format(node_id))
         
@@ -364,13 +370,18 @@ class RaftNode:
         filename = "log_" + str(self.node_id) + ".pickle"
         helpers.commit(self,filename)
 
-    def fix_link(self, node_id):
+    def fix_link(self, node_id, firstConnection=False):
         if node_id != self.node_id and self.connected[node_id] == False:
             self.connected[node_id] = True
             self.soc_send[node_id].connect((constants.HOST, constants.CLIENT_PORT_PREFIX+node_id))
-            helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}".format(self.node_id))
-            received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
-            print(received)
+            if firstConnection:
+                helpers.send_padded_msg(self.soc_send[node_id],"Connection (First) request from {}\nPublic Key = {}".format(self.node_id, str_format(self.pk[self.node_id])))
+                received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
+                print(received)
+            else:
+                helpers.send_padded_msg(self.soc_send[node_id],"Connection request from {}".format(self.node_id))
+                received = self.soc_send[node_id].recv(constants.MESSAGE_SIZE)
+                print(received)
 
     def fail_link(self, node_id):
         self.send_fail(node_id)
@@ -383,3 +394,6 @@ class RaftNode:
             if peer != self.node_id:
                 self.fail_link(peer)
         self.save_state()
+
+def str_format(pk):
+    return '{} {}'.format(pk.n, pk.e)

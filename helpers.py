@@ -1,6 +1,6 @@
 import constants
 import pickle
-import random
+import rsa
 from enum import Enum
 
 
@@ -34,9 +34,10 @@ def send_padded_msg(sock, msg):
     sock.sendall(padded_msg)
 
 # send a string and a byte object over socket via padding
-def send_padded_msg_encoded(sock, msg, msg_enc):
+def send_padded_msg_encoded(sock, msg, msg_enc, pk):
     encoded_msg = msg.encode()
     num_bytes = len(encoded_msg)
+    msg_enc = rsa.decrypt(msg_enc, pk) # encryption
     num_bytes_enc = len(msg_enc)
     header = header_s(num_bytes, "e")
     header_enc = header_s(num_bytes_enc, "")
@@ -51,12 +52,15 @@ def to_string(obj):
     return json_obj
 
 # format keyboard input
-def process_input(request):
+id = 0
+def process_input(request, self_id):
+    global id
     type, client_ids, dict_id, key, value = None, [], -1, None, None
     type = request[0]
     if type in constants.valid_commands:
         if type == 'create':
-            dict_id = str(random.randint(0, 100))
+            id += 1
+            dict_id = '({},{})'.format(id, self_id)
             client_ids=get_client_ids(request)
         elif type in ['get', 'put']:
             dict_id = request[1]
@@ -92,6 +96,22 @@ class Command:
         self.key = key
         self.value = value
 
+    def get_log_entry(self, pk, dict_pk, dict_sk):
+        log_entry = {}
+        log_entry['type'] = get_command_name(self.type)
+        log_entry['dict_id'] = self.dict_id
+        if self.type == CommandType.CREATE:
+            log_entry['client_ids'] = self.client_ids
+            log_entry['dict_pk'] = dict_pk
+            for client_id in self.client_ids:
+                log_entry[('encrypted_key', client_id)] = rsa.encrypt(pickle.dumps(dict_sk), pk[client_id])
+        elif self.type in [CommandType.PUT, CommandType.GET]:
+            log_entry['issuer_id'] = self.issuer_id
+            log_entry['encrypted_key'] = rsa.encrypt(self.key.encode(), dict_pk)
+            if self.type == CommandType.PUT:
+                log_entry['encrypted_value'] = rsa.encrypt(self.value.encode(), dict_pk)
+        return log_entry
+
 class CommandType(Enum):
     CREATE = 0
     PUT = 1
@@ -106,4 +126,15 @@ def get_command_type(type):
         return CommandType.GET
     else:
         enter_error('invalid command type in get_command_type()')
+        raise Exception()
+    
+def get_command_name(type):
+    if type == CommandType.CREATE:
+        return 'create'
+    elif type == CommandType.PUT:
+        return 'put'
+    elif type == CommandType.GET:
+        return 'get'
+    else:
+        enter_error('invalid command type in get_command_name()')
         raise Exception()

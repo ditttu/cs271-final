@@ -21,10 +21,15 @@ class Dictionaries:
     def __init__(self, client_id):
         self.dicts = {}
         self.client_id = client_id
+        self.dict_pk = {}
+        self.dict_sk = {}
+        self.pk = {} # client public keys
 
-    def create(self, client_ids, dict_id):
+    def create(self, client_ids, dict_id, dict_pk, dict_sk):
         self.dicts[dict_id] = Dictionary(client_ids)
-        print(f"Dictionary Created. ID : {dict_id}. Clients : {client_ids}\n---")
+        self.dict_pk[dict_id] = dict_pk
+        self.dict_sk[dict_id] = dict_sk
+        print(f"Dictionary Created. ID : {dict_id}. Public Key: {dict_pk}. Clients : {client_ids}\n---")
         return dict_id
     
     def put(self, dict_id, key, value):
