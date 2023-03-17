@@ -8,3 +8,4 @@ HEADER_SIZE = 5
 TIMEOUT = 15 # election timeout period in seconds
 HEARTBEAT = 1 #send heartbeat if it has been this much time
 valid_commands = [ 'create', 'put', 'get', 'printDict', 'printAll', 'failLink', 'fixLink', 'failProcess' ]
+KEY_LENGTH = 512
