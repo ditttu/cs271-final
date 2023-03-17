@@ -7,6 +7,7 @@ import pickle
 import os.path
 import os
 import signal
+import rsa
 
 # custom classes and constants
 import raft
@@ -35,7 +36,7 @@ if os.path.isfile("./log_{}.pickle".format(self_id)):
     raftServer = helpers.read("log_{}.pickle".format(self_id))
     raftServer.soc_send = soc_send
     initiated = True
-    raftServer.instantiate_sockets()
+    raftServer.instantiate_sockets(firstConnection=False)
 else:
     raftServer = raft.RaftNode(self_id, peers, soc_send)
 
@@ -52,6 +53,8 @@ def unencoded_input(sock, msg, self_id):
         node_id = int(data[3])
         sock.send("Successfully connected to {}".format(self_id).encode())
         raftServer.fix_link(node_id)
+        if data[1] == '(First)':
+            raftServer.pk[node_id] = rsa.PublicKey(data[-2], data[-1]) # read pk
     else:
         helpers.enter_error('Received message that is incorrectly formatted.')
 
@@ -73,6 +76,7 @@ def encoded_input(sock, msg, self_id):
         sock.send("Successfully connected to {}".format(self_id).encode())
     else:
         obj = pickle.loads(enc_obj)
+        obj = rsa.decrypt(obj, raftServer.sk) # decryption
         if obj['type'] == 'request_vote':
             raftServer.handle_vote_request(obj)
         elif obj['type'] == 'append_entries':
@@ -102,7 +106,7 @@ def keyboard_input(request):
         initiated = True
         raftServer.instantiate_sockets()
     else:
-        type, client_ids, dict_id, key, value = helpers.process_input(request)
+        type, client_ids, dict_id, key, value = helpers.process_input(request, self_id)
         if type in ['create', 'put', 'get']:
             command_type = helpers.get_command_type(type)
             command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
