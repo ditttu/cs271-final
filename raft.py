@@ -6,6 +6,7 @@ import helpers
 import random
 import socket
 import rsa
+import pickle
 from enum import Enum
 
 class RaftState(Enum):
@@ -208,17 +209,65 @@ class RaftNode:
                         continue
                     self.send_ack(node_id)
 
-    def apply_log_entry(self, command : helpers.Command):
-        print(f"Applying command: {command.type}")
-        if command.type == helpers.CommandType.CREATE:
-            if str(self.node_id) in command.client_ids:
-                self.dicts.create(command.client_ids, command.dict_id)
-        elif command.type == helpers.CommandType.PUT:
-            if self.dicts.check_dict_id(command.dict_id):
-                self.dicts.put(command.dict_id, command.key, command.value)
-        elif command.type == helpers.CommandType.GET:
-            if self.dicts.check_dict_id(command.dict_id):
-                self.dicts.get(command.dict_id, command.key)
+    def apply_log_entry(self, command):
+        cmd_type = helpers.get_command_type(command['type'])
+        dict_id = command['dict_id']
+        issuer_id = command['issuer_id']
+        if cmd_type == helpers.CommandType.CREATE:
+            if self.node_id not in command['client_ids']:
+                print('Cannot create dictionary the client is not a part of.')
+                return
+            if issuer_id not in command['client_ids']:
+                print('Cannot create dictionary. Invalid issuer ID.')
+                return
+            dict_key = ('encrypted key', self.node_id)
+            if dict_key not in command:
+                raise Exception('incorrectly formatted log entry')
+            dict_pk = command['dict_pk']
+            dict_sk = pickle.loads(rsa.decrypt(command[dict_key], self.sk))
+            self.dicts.create(dict_id, command['client_ids'], dict_pk, dict_sk)
+
+        elif cmd_type == helpers.CommandType.PUT:
+            if dict_id not in self.dicts.dicts:
+                print('Dictionary does not exist. Cannot apply put operation.')
+                return
+            if issuer_id not in self.dicts.dicts[dict_id].client_ids:
+                print('Cannot apply put operation. Invalid issuer ID.')
+                return
+            if self.node_id not in self.dicts.dicts[dict_id].client_ids:
+                print('Cannot apply put operation. Access denied.')
+                return
+            self.check_dict_sk(dict_id)
+            dict_sk = self.dicts.dict_sk[dict_id]
+            key = rsa.decrypt(command['encrypted_key'], dict_sk).decode()
+            value = rsa.decrypt(command['encrypted_value'], dict_sk).decode()
+            self.dicts.put(dict_id, key, value)
+
+        elif cmd_type == helpers.CommandType.GET:
+            if dict_id not in self.dicts.dicts:
+                print('Dictionary does not exist. Cannot apply get operation.')
+                return
+            if issuer_id not in self.dicts.dicts[dict_id].client_ids:
+                print('Cannot apply get operation. Invalid issuer ID.')
+                return
+            if self.node_id not in self.dicts.dicts[dict_id].client_ids:
+                print('Cannot apply get operation. Access denied.')
+                return
+            self.check_dict_sk(dict_id)
+            dict_sk = self.dicts.dict_sk[dict_id]
+            key = rsa.decrypt(command['encrypted_key'], dict_sk).decode()
+            self.dicts.get(dict_id, key)
+
+        # print(f"Applying command: {command.type}")
+        # if command.type == helpers.CommandType.CREATE:
+        #     if str(self.node_id) in command.client_ids:
+        #         self.dicts.create(command.client_ids, command.dict_id)
+        # elif command.type == helpers.CommandType.PUT:
+        #     if self.dicts.check_dict_id(command.dict_id):
+        #         self.dicts.put(command.dict_id, command.key, command.value)
+        # elif command.type == helpers.CommandType.GET:
+        #     if self.dicts.check_dict_id(command.dict_id):
+        #         self.dicts.get(command.dict_id, command.key)
         
     def check_timeout(self):
         now = time.time()
@@ -352,9 +401,28 @@ class RaftNode:
     def handle_leader_add(self, obj):
         self.leader_add(obj['entry'])
 
-    def handle_command(self, command):
+    def handle_command(self, command : helpers.Command):
         index = len(self.log)
-        log_entry = {'command': command, 'index' : index, 'term' : self.current_term}
+        dict_pk, dict_sk, dict_id = None, None, (-1,-1)
+        if command.type == helpers.CommandType.CREATE:
+            dict_id = command.dict_id
+            (dict_pk, dict_sk) = rsa.newkeys(constants.KEY_LENGTH) # create dictionary keys and store them
+            self.dicts.dict_pk[dict_id] = dict_pk
+            self.dicts.dict_sk[dict_id] = dict_sk
+        else:
+            dict_id = command.dict_id
+            dict_pk = self.dicts.dict_pk[dict_id]
+            # dict_sk = self.dicts.dict_sk[dict_id]
+
+
+        # create log entry
+        log_entry = {}
+        if command.type in [helpers.CommandType.CREATE, helpers.CommandType.GET, helpers.CommandType.PUT]:
+            log_entry = {'command': command.get_log_entry(self.pk, dict_pk, dict_sk), 'index' : index, 'term' : self.current_term}
+        else:
+            helpers.enter_error("handle_command() called with incorrect command type.")
+            raise Exception()
+
         if self.state == RaftState.LEADER or self.state == RaftState.CANDIDATE:
             self.commit_maj.append(set())
             self.log.append(log_entry)
