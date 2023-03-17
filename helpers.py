@@ -73,7 +73,8 @@ def process_input(request, self_id):
     return type, client_ids, dict_id, key, value
 
 def get_client_ids(request):
-    return request[1:]
+    ans = [int(i) for i in request[1:]]
+    return ans
 
 # writing to / reading from disc
 def commit(obj, file_name):
@@ -92,9 +93,10 @@ def read(filename):
 
 # commands
 class Command:
-    def __init__(self, type, client_ids=[], dict_id=None, key=None, value=None):
+    def __init__(self, type, client_ids=[], dict_id=None, key=None, value=None, issuer_id = -1):
         self.type = type
         self.client_ids = client_ids
+        self.issuer_id = issuer_id
         self.dict_id = dict_id
         self.key = key
         self.value = value
@@ -103,13 +105,13 @@ class Command:
         log_entry = {}
         log_entry['type'] = get_command_name(self.type)
         log_entry['dict_id'] = self.dict_id
+        log_entry['issuer_id'] = self.issuer_id
         if self.type == CommandType.CREATE:
             log_entry['client_ids'] = self.client_ids
             log_entry['dict_pk'] = dict_pk
             for client_id in self.client_ids:
-                log_entry[('encrypted_key', client_id)] = encrypt(pickle.dumps(dict_sk), pk[client_id])
+                log_entry[('encrypted_key', client_id)] = encrypt(pickle.dumps(dict_sk), pk[int(client_id)])
         elif self.type in [CommandType.PUT, CommandType.GET]:
-            log_entry['issuer_id'] = self.issuer_id
             log_entry['encrypted_key'] = encrypt(self.key.encode(), dict_pk)
             if self.type == CommandType.PUT:
                 log_entry['encrypted_value'] = encrypt(self.value.encode(), dict_pk)

@@ -211,7 +211,8 @@ class RaftNode:
 
     def apply_log_entry(self, command):
         cmd_type = helpers.get_command_type(command['type'])
-        dict_id = command['dict_id']
+        dict_id = tuple(map(int,command['dict_id'][1:-1].split(',')))
+        print(dict_id)
         issuer_id = command['issuer_id']
         if cmd_type == helpers.CommandType.CREATE:
             if self.node_id not in command['client_ids']:
@@ -220,11 +221,13 @@ class RaftNode:
             if issuer_id not in command['client_ids']:
                 print('Cannot create dictionary. Invalid issuer ID.')
                 return
-            dict_key = ('encrypted key', self.node_id)
+            dict_key = ('encrypted_key', self.node_id)
+            print(dict_key)
+            print(command)
             if dict_key not in command:
                 raise Exception('incorrectly formatted log entry')
             dict_pk = command['dict_pk']
-            dict_sk = pickle.loads(rsa.decrypt(command[dict_key], self.sk))
+            dict_sk = pickle.loads(helpers.decrypt(command[dict_key], self.sk))
             self.dicts.create(dict_id, command['client_ids'], dict_pk, dict_sk)
 
         elif cmd_type == helpers.CommandType.PUT:
@@ -239,8 +242,8 @@ class RaftNode:
                 return
             self.check_dict_sk(dict_id)
             dict_sk = self.dicts.dict_sk[dict_id]
-            key = rsa.decrypt(command['encrypted_key'], dict_sk).decode()
-            value = rsa.decrypt(command['encrypted_value'], dict_sk).decode()
+            key = helpers.decrypt(command['encrypted_key'], dict_sk).decode()
+            value = helpers.decrypt(command['encrypted_value'], dict_sk).decode()
             self.dicts.put(dict_id, key, value)
 
         elif cmd_type == helpers.CommandType.GET:
@@ -255,7 +258,7 @@ class RaftNode:
                 return
             self.check_dict_sk(dict_id)
             dict_sk = self.dicts.dict_sk[dict_id]
-            key = rsa.decrypt(command['encrypted_key'], dict_sk).decode()
+            key = helpers.decrypt(command['encrypted_key'], dict_sk).decode()
             self.dicts.get(dict_id, key)
 
         # print(f"Applying command: {command.type}")

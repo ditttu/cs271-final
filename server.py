@@ -113,7 +113,7 @@ def keyboard_input(request):
         type, client_ids, dict_id, key, value = helpers.process_input(request, self_id)
         if type in ['create', 'put', 'get']:
             command_type = helpers.get_command_type(type)
-            command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value)
+            command = helpers.Command(command_type, client_ids=client_ids, dict_id=dict_id, key=key, value=value, issuer_id=self_id)
             raftServer.handle_command(command)
         elif type == 'printDict':
             raftServer.dicts.printDict(dict_id)
