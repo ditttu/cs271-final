@@ -216,6 +216,7 @@ class RaftNode:
         issuer_id = command['issuer_id']
         if cmd_type == helpers.CommandType.CREATE:
             if self.node_id not in command['client_ids']:
+                self.dicts.dict_pk[dict_id] = command['dict_pk']
                 print('Cannot create dictionary the client is not a part of.')
                 return
             if issuer_id not in command['client_ids']:
@@ -228,7 +229,7 @@ class RaftNode:
                 raise Exception('incorrectly formatted log entry')
             dict_pk = command['dict_pk']
             dict_sk = pickle.loads(helpers.decrypt(command[dict_key], self.sk))
-            self.dicts.create(dict_id, command['client_ids'], dict_pk, dict_sk)
+            self.dicts.create(command['client_ids'], dict_id, dict_pk, dict_sk)
 
         elif cmd_type == helpers.CommandType.PUT:
             if dict_id not in self.dicts.dicts:
@@ -240,8 +241,11 @@ class RaftNode:
             if self.node_id not in self.dicts.dicts[dict_id].client_ids:
                 print('Cannot apply put operation. Access denied.')
                 return
-            self.check_dict_sk(dict_id)
-            dict_sk = self.dicts.dict_sk[dict_id]
+            if dict_id in self.dicts.dict_sk:
+                dict_sk = self.dicts.dict_sk[dict_id]
+            else:
+                helpers.enter_error("Secret key not found for {}".format(dict_id))
+                return
             key = helpers.decrypt(command['encrypted_key'], dict_sk).decode()
             value = helpers.decrypt(command['encrypted_value'], dict_sk).decode()
             self.dicts.put(dict_id, key, value)
@@ -256,8 +260,11 @@ class RaftNode:
             if self.node_id not in self.dicts.dicts[dict_id].client_ids:
                 print('Cannot apply get operation. Access denied.')
                 return
-            self.check_dict_sk(dict_id)
-            dict_sk = self.dicts.dict_sk[dict_id]
+            if dict_id in self.dicts.dict_sk:
+                dict_sk = self.dicts.dict_sk[dict_id]
+            else:
+                helpers.enter_error("Secret key not found for {}".format(dict_id))
+                return
             key = helpers.decrypt(command['encrypted_key'], dict_sk).decode()
             self.dicts.get(dict_id, key)
 
@@ -416,9 +423,8 @@ class RaftNode:
             self.dicts.dict_pk[dict_id] = dict_pk
             self.dicts.dict_sk[dict_id] = dict_sk
         else:
-            dict_id = command.dict_id
+            dict_id = tuple(map(int,command.dict_id[1:-1].split(',')))
             dict_pk = self.dicts.dict_pk[dict_id]
-            # dict_sk = self.dicts.dict_sk[dict_id]
 
 
         # create log entry
