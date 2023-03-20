@@ -49,13 +49,14 @@ def unencoded_input(sock, msg, self_id):
     msg_string = msg[constants.HEADER_SIZE:constants.HEADER_SIZE + num_bytes].decode()
     data = msg_string.split()
     if data[0] == "Connection": # socket connection
-        print(' '.join(data))
         if data[1] == '(First)':
+            print(' '.join(data[:5]))
             node_id = int(data[4])
             sock.send("Successfully connected to {}".format(self_id).encode())
             raftServer.fix_link(node_id, True)
             raftServer.pk[node_id] = rsa.PublicKey(int(data[-2]), int(data[-1])) # read pk
         else:
+            print(' '.join(data[:4]))
             node_id = int(data[3])
             sock.send("Successfully connected to {}".format(self_id).encode())
             raftServer.fix_link(node_id)

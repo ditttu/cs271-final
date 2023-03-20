@@ -70,6 +70,8 @@ def process_input(request, self_id):
             key  = request[2]
             if type == 'put':
                 value = request[3]
+        elif type == 'printDict':
+            dict_id =  tuple(map(int,request[1][1:-1].split(',')))
     return type, client_ids, dict_id, key, value
 
 def get_client_ids(request):

@@ -35,6 +35,7 @@ class Dictionaries:
     def put(self, dict_id, key, value):
         if self.check_dict_id(dict_id):
             self.dicts[dict_id].put(key, value)
+            print(f"Added Dictionary_{dict_id}[{key}] = {value}")
     
     def get(self, dict_id, key):
         if self.check_dict_id(dict_id):

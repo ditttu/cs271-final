@@ -76,6 +76,7 @@ class RaftNode:
         self.send_heartbeat()
 
     def become_follower(self):
+        self.stop_election_timer()
         if self.state != RaftState.FOLLOWER:
             print("Became follower")
             self.state = RaftState.FOLLOWER
@@ -106,22 +107,24 @@ class RaftNode:
         if candidate_term > self.current_term:
             self.current_term = candidate_term
             self.voted_for = None
-            self.become_follower()
             
         if candidate_term < self.current_term:
             return candidate_id, False, self.current_term
         
-        if self.voted_for is not None and self.voted_for != candidate_id:
-            return candidate_id, False, self.current_term
+        if candidate_term == self.current_term:
+            if self.voted_for is not None and self.voted_for != candidate_id:
+                return candidate_id, False, self.current_term
+        self.become_follower()
         
         last_index = len(self.log) - 1
         last_term = self.log[last_index]['term'] if last_index >= 0 else 0
+        if last_log_term < last_term:
+            return candidate_id, False, self.current_term
         
-        if last_log_term < last_term or (last_log_term == last_term and last_log_index < last_index):
+        if last_log_term == last_term and last_log_index < last_index:
             return candidate_id, False, self.current_term
         
         self.voted_for = candidate_id
-        self.reset_election_timer()
         print("Returned Vote To {}".format(candidate_id))
         return candidate_id, True, candidate_term
         
@@ -212,7 +215,6 @@ class RaftNode:
     def apply_log_entry(self, command):
         cmd_type = helpers.get_command_type(command['type'])
         dict_id = tuple(map(int,command['dict_id'][1:-1].split(',')))
-        print(dict_id)
         issuer_id = command['issuer_id']
         if cmd_type == helpers.CommandType.CREATE:
             if self.node_id not in command['client_ids']:
@@ -223,8 +225,6 @@ class RaftNode:
                 print('Cannot create dictionary. Invalid issuer ID.')
                 return
             dict_key = ('encrypted_key', self.node_id)
-            print(dict_key)
-            print(command)
             if dict_key not in command:
                 raise Exception('incorrectly formatted log entry')
             dict_pk = command['dict_pk']
@@ -282,6 +282,7 @@ class RaftNode:
     def check_timeout(self):
         now = time.time()
         if (self.state == RaftState.FOLLOWER or self.state == RaftState.CANDIDATE) and (self.election_timer is None):
+            print("starting election")
             self.run_election_timer()
         
         elif self.state == RaftState.LEADER and now - self.last_heartbeat_timestamp > constants.HEARTBEAT:
@@ -318,7 +319,7 @@ class RaftNode:
 
 
     def send_request_vote(self, destination):
-        prev_log_index = self.next_index[destination] - 1
+        prev_log_index = len(self.log) - 1
         prev_log_term = self.log[prev_log_index]['term'] if prev_log_index >= 0 else 0
         message = {
             'type': "request_vote",
